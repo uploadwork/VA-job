@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>👨‍💼 Admin Dashboard</title>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; background:#FFD84D; color:#000; }
+    .wrap { max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { text-align:center; }
+    .user-card { background:#fff; padding:15px; margin:10px 0; border-radius:8px; border:1px solid #ccc; }
+    .actions { margin-top:10px; }
+    .actions input { width:80px; padding:5px; margin-right:5px; }
+    .actions button { padding:6px 10px; margin-right:5px; border:none; border-radius:4px; cursor:pointer; }
+    .add { background:green; color:white; }
+    .remove { background:red; color:white; }
+    .pin { background:#000; color:white; }
+    .error { color:red; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>👨‍💼 Admin Dashboard</h1>
+    <div id="loginBox">
+      <p>Enter Admin Password:</p>
+      <input type="password" id="adminPass" placeholder="Password">
+      <button onclick="checkAdmin()">Enter</button>
+      <div id="errorBox" class="error"></div>
+    </div>
+    <div id="dashboard" style="display:none;">
+      <div id="userList">Loading users...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { 
+      getFirestore, collection, onSnapshot, doc, getDoc, updateDoc 
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBT-uB0tNUGOZGC8V2I4iP8QUXbXOHu44I",
+      authDomain: "newbie-d6a5c.firebaseapp.com",
+      projectId: "newbie-d6a5c",
+      storageBucket: "newbie-d6a5c.firebasestorage.app",
+      messagingSenderId: "931411577096",
+      appId: "1:931411577096:web:8380459a4564c83ff8c4bd"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Hardcoded admin password
+    const ADMIN_PASSWORD = "divine45$";
+
+    // Password check
+    window.checkAdmin = function() {
+      const inputPass = document.getElementById("adminPass").value;
+      if (inputPass === ADMIN_PASSWORD) {
+        document.getElementById("loginBox").style.display = "none";
+        document.getElementById("dashboard").style.display = "block";
+        loadUsers();
+      } else {
+        document.getElementById("errorBox").innerText = "❌ Incorrect password.";
+      }
+    };
+
+    // Live load users
+    function loadUsers() {
+      const userList = document.getElementById("userList");
+      userList.innerHTML = "Loading users...";
+
+      onSnapshot(collection(db, "users"), (snapshot) => {
+        userList.innerHTML = "";
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const div = document.createElement("div");
+          div.className = "user-card";
+          div.innerHTML = `
+            <strong>${docSnap.id}</strong><br>
+            Balance: $${data.earnings || 0}<br>
+            Pin: ${data.pin || "Not set"}
+            <div class="actions">
+              <input type="number" id="amount-${docSnap.id}" placeholder="Amount">
+              <button class="add" onclick="addBalance('${docSnap.id}')">Add</button>
+              <button class="remove" onclick="removeBalance('${docSnap.id}')">Remove</button>
+              <button class="pin" onclick="generatePin('${docSnap.id}')">New Pin</button>
+            </div>
+          `;
+          userList.appendChild(div);
+        });
+      });
+    }
+
+    // Add balance
+    window.addBalance = async function(username) {
+      const amount = parseFloat(document.getElementById(`amount-${username}`).value);
+      if (isNaN(amount)) return alert("Enter a valid amount.");
+      const ref = doc(db, "users", username);
+      const snap = await getDoc(ref);
+      await updateDoc(ref, { earnings: (snap.data().earnings || 0) + amount });
+      alert("Balance added ✅");
+    };
+
+    // Remove balance
+    window.removeBalance = async function(username) {
+      const amount = parseFloat(document.getElementById(`amount-${username}`).value);
+      if (isNaN(amount)) return alert("Enter a valid amount.");
+      const ref = doc(db, "users", username);
+      const snap = await getDoc(ref);
+      await updateDoc(ref, { earnings: Math.max(0, (snap.data().earnings || 0) - amount) });
+      alert("Balance removed ✅");
+    };
+
+    // Generate pin
+    window.generatePin = async function(username) {
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      const ref = doc(db, "users", username);
+      await updateDoc(ref, { pin });
+      alert(`New Pin for ${username}: ${pin}`);
+    };
+  </script>
+</body>
+</html>

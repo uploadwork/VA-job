@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Earnings Dashboard</title>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; background:#FFE85C; color:#000; }
+    .wrap { max-width: 400px; margin: 0 auto; padding: 20px; }
+
+    .header { display:flex; align-items:center; justify-content:space-between; }
+    .header .left { display:flex; align-items:center; gap:10px; }
+    .avatar { width:40px; height:40px; border-radius:50%; background:#ccc; }
+
+    .currency-select { font-size:16px; padding:5px; border-radius:6px; border:1px solid #333; background:#fff; cursor:pointer; }
+
+    .earnings { margin:15px 0; font-size:20px; font-weight:bold; }
+    .money { font-size:36px; font-weight:bold; display:flex; align-items:center; gap:10px; }
+    .eye-btn { background:none; border:none; cursor:pointer; font-size:20px; }
+
+    .pills { display:flex; justify-content:space-between; margin:20px 0; }
+    .pill { background:#000; color:#fff; border:none; padding:10px 18px; border-radius:20px; font-weight:bold; cursor:pointer; }
+
+    .panel { background:#222; color:#fff; padding:20px; border-radius:10px; text-align:center; }
+    .panel h2 { font-size:18px; margin-bottom:10px; }
+    .panel input, .panel select { width:100%; padding:10px; border-radius:20px; border:none; margin-bottom:10px; font-size:16px; }
+    .enter { background:green; color:#fff; padding:10px 20px; border:none; border-radius:20px; font-weight:bold; cursor:pointer; }
+    .fineprint { margin-top:10px; font-size:12px; line-height:1.4; }
+
+    .footer-pills { display:flex; justify-content:space-between; margin-top:20px; }
+    .bigpill { background:#000; color:#fff; border:none; padding:15px 20px; border-radius:20px; font-weight:bold; cursor:pointer; flex:1; margin:0 5px; }
+
+    .message { margin-top:10px; padding:10px; border-radius:6px; font-size:14px; }
+    .error { background:#f8d7da; color:#721c24; }
+    .success { background:#d4edda; color:#155724; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="left">
+        <div class="avatar"></div>
+        <div id="usernameDisplay">Hi User</div>
+      </div>
+      <select class="currency-select" id="currency">
+        <option value="usd" selected>$ USD</option>
+        <option value="php">₱ PHP</option>
+        <option value="gbp">£ GBP</option>
+        <option value="eur">€ EUR</option>
+      </select>
+    </div>
+
+    <div class="earnings">Earnings:</div>
+    <div class="money" id="earningsAmount">
+      <span id="balanceValue">$0.00</span>
+      <button class="eye-btn" id="toggleEye">👁️</button>
+    </div>
+
+    <div class="pills">
+      <button class="pill" id="addPaymentBtn">Add payment method</button>
+      <button class="pill" id="withdrawBtn">Withdraw</button>
+    </div>
+
+    <!-- Payment panel -->
+    <div class="panel" id="paymentPanel" style="display:none;">
+      <h2>Select Payment Method</h2>
+      <select id="paymentSelect">
+        <option value="">--Choose--</option>
+        <option value="paypal">PayPal</option>
+        <option value="gcash">Gcash</option>
+        <option value="bank">Bank</option>
+      </select>
+      <input type="text" id="paymentInput" placeholder="">
+      <button class="enter" id="savePayment">Save</button>
+      <div class="fineprint" id="paymentSaved"></div>
+    </div>
+
+    <!-- Pin panel -->
+    <div class="panel">
+      <h2>Enter activation pin here</h2>
+      <input type="text" id="pinInput" placeholder="Enter Pin">
+      <button class="enter" id="enterPinBtn">Enter</button>
+      <div class="fineprint">
+        To ensure a smooth and secure withdrawal process, an activation fee is required before
+        earnings can be withdrawn. Tap "See more" for details.
+      </div>
+      <div id="pinMessage"></div>
+    </div>
+
+    <div class="footer-pills">
+      <button class="bigpill" id="buyPinBtn">Click here to buy activation pin</button>
+      <button class="bigpill" id="seeMoreBtn">See more</button>
+    </div>
+  </div>
+
+  <!-- 🔹 Firebase + Firestore + Auth -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, signOut } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    // ✅ Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBT-uB0tNUGOZGC8V2I4iP8QUXbXOHu44I",
+      authDomain: "newbie-d6a5c.firebaseapp.com",
+      projectId: "newbie-d6a5c",
+      storageBucket: "newbie-d6a5c.firebasestorage.app",
+      messagingSenderId: "931411577096",
+      appId: "1:931411577096:web:8380459a4564c83ff8c4bd"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    console.log("✅ Firebase connected!");
+
+    // -------- Variables --------
+    let username = "Guest";
+    const usernameDisplay = document.getElementById("usernameDisplay");
+    const balanceValue = document.getElementById("balanceValue");
+    const currencySelect = document.getElementById("currency");
+    const toggleEye = document.getElementById("toggleEye");
+    const withdrawBtn = document.getElementById("withdrawBtn");
+    const pinInput = document.getElementById("pinInput");
+    const enterPinBtn = document.getElementById("enterPinBtn");
+    const pinMessage = document.getElementById("pinMessage");
+
+    const addPaymentBtn = document.getElementById("addPaymentBtn");
+    const paymentPanel = document.getElementById("paymentPanel");
+    const paymentSelect = document.getElementById("paymentSelect");
+    const paymentInput = document.getElementById("paymentInput");
+    const savePayment = document.getElementById("savePayment");
+    const paymentSaved = document.getElementById("paymentSaved");
+
+    let earnings = 0;
+    let activationPin = null;
+    let isHidden = false;
+    let pinEntered = false;
+
+    const rates = { usd: 1, php: 56, gbp: 0.79, eur: 0.92 };
+    const symbols = { usd: "$", php: "₱", gbp: "£", eur: "€" };
+
+    // -------- Firestore helpers --------
+    async function saveUserData(data) {
+      await setDoc(doc(db, "users", username), data, { merge: true });
+    }
+
+    async function loadUserData() {
+      const ref = doc(db, "users", username);
+      const snap = await getDoc(ref);
+      return snap.exists() ? snap.data() : null;
+    }
+
+    async function updateEarnings(newAmount) {
+      await updateDoc(doc(db, "users", username), { earnings: newAmount });
+      earnings = newAmount;
+      updateBalance();
+    }
+
+    // -------- UI Logic --------
+    function updateBalance() {
+      const selected = currencySelect.value;
+      const converted = (earnings * rates[selected]).toFixed(2);
+      balanceValue.textContent = isHidden ? "****" : `${symbols[selected]}${converted}`;
+    }
+
+    toggleEye.addEventListener("click", () => {
+      isHidden = !isHidden;
+      updateBalance();
+    });
+
+    currencySelect.addEventListener("change", updateBalance);
+
+    addPaymentBtn.addEventListener("click", () => {
+      paymentPanel.style.display = paymentPanel.style.display === "none" ? "block" : "none";
+    });
+
+    paymentSelect.addEventListener("change", () => {
+      if (paymentSelect.value === "paypal") paymentInput.placeholder = "Enter PayPal username";
+      if (paymentSelect.value === "gcash") paymentInput.placeholder = "Enter GCash number";
+      if (paymentSelect.value === "bank") paymentInput.placeholder = "Enter Bank account number";
+    });
+
+    savePayment.addEventListener("click", async () => {
+      if (paymentSelect.value && paymentInput.value.trim()) {
+        await saveUserData({ 
+          paymentMethod: paymentSelect.value, 
+          paymentDetail: paymentInput.value 
+        });
+        paymentSaved.textContent = `Saved: ${paymentSelect.value} - ${paymentInput.value}`;
+      }
+    });
+
+    enterPinBtn.addEventListener("click", async () => {
+      const data = await loadUserData();
+      activationPin = data?.pin || null;
+      if (!activationPin) {
+        pinMessage.innerHTML = `<div class="message error">⚠️ No activation pin assigned.</div>`;
+        return;
+      }
+      if (pinInput.value === activationPin) {
+        pinMessage.innerHTML = `<div class="message success">✅ Pin correct. You can now withdraw.</div>`;
+        pinEntered = true;
+      } else {
+        pinMessage.innerHTML = `<div class="message error">❌ Incorrect pin.</div>`;
+        pinEntered = false;
+      }
+    });
+
+    withdrawBtn.addEventListener("click", () => {
+      if (earnings < 35) {
+        alert("⚠️ Balance must be at least $35 to withdraw.");
+        return;
+      }
+      if (!pinEntered) {
+        alert("⚠️ Please enter correct activation pin first.");
+        return;
+      }
+      alert("✅ Withdrawal request successful!");
+    });
+
+    document.getElementById("buyPinBtn").addEventListener("click", () => {
+      alert("💡 Please contact your project manager to purchase an activation pin.");
+    });
+
+    document.getElementById("seeMoreBtn").addEventListener("click", () => {
+      alert("ℹ️ The activation pin ensures security and verifies users before withdrawal.");
+    });
+
+    // -------- Init with Firebase Auth --------
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        username = user.email;  // ✅ show logged-in email
+        usernameDisplay.textContent = "Hi " + username;
+
+        const data = await loadUserData();
+        if (data) {
+          earnings = data.earnings || 5;
+          activationPin = data.pin || null;
+        } else {
+          await saveUserData({ earnings: 5 });
+          earnings = 5;
+        }
+
+        updateBalance();
+      } else {
+        // If no user logged in, go back to login
+        window.location.href = "index.html";
+      }
+    });
+  </script>
+</body>
+</html>
